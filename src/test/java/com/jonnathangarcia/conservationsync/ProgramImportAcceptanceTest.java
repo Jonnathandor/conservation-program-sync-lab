@@ -35,37 +35,37 @@ public class ProgramImportAcceptanceTest {
         private JdbcTemplate jdbcTemplate;
 
         @Test
-    void reimportingTheSameValidRecordDoesNotCreateADuplicate()
-            throws Exception {
+        void reimportingTheSameValidRecordDoesNotCreateADuplicate()
+                throws Exception {
 
-        importCsv()
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.received").value(1))
-                .andExpect(jsonPath("$.created").value(1))
-                .andExpect(jsonPath("$.updated").value(0))
-                .andExpect(jsonPath("$.unchanged").value(0))
-                .andExpect(jsonPath("$.rejected").value(0));
+            importCsv()
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.received").value(1))
+                    .andExpect(jsonPath("$.created").value(1))
+                    .andExpect(jsonPath("$.updated").value(0))
+                    .andExpect(jsonPath("$.unchanged").value(0))
+                    .andExpect(jsonPath("$.rejected").value(0));
 
-        importCsv()
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.received").value(1))
-                .andExpect(jsonPath("$.created").value(0))
-                .andExpect(jsonPath("$.updated").value(0))
-                .andExpect(jsonPath("$.unchanged").value(1))
-                .andExpect(jsonPath("$.rejected").value(0));
+            importCsv()
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.received").value(1))
+                    .andExpect(jsonPath("$.created").value(0))
+                    .andExpect(jsonPath("$.updated").value(0))
+                    .andExpect(jsonPath("$.unchanged").value(1))
+                    .andExpect(jsonPath("$.rejected").value(0));
 
-        var rows = jdbcTemplate.queryForList("""
-                SELECT source_id, region_code, status
-                FROM program_record
-                WHERE source_id = ?
-                """, SOURCE_ID);
+            var rows = jdbcTemplate.queryForList("""
+                    SELECT source_id, region_code, status
+                    FROM program_record
+                    WHERE source_id = ?
+                    """, SOURCE_ID);
 
-        assertThat(rows).hasSize(1);
-        assertThat(rows.get(0))
-                .containsEntry("source_id", SOURCE_ID)
-                .containsEntry("region_code", "MB")
-                .containsEntry("status", "ACTIVE");
-    }
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0))
+                    .containsEntry("source_id", SOURCE_ID)
+                    .containsEntry("region_code", "MB")
+                    .containsEntry("status", "ACTIVE");
+        }
 
         private ResultActions importCsv() throws Exception {
         var file = new MockMultipartFile(
