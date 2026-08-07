@@ -18,10 +18,11 @@ public class ProgramImportService {
     @Transactional
     public ImportResult importRows(List<ProgramRecordInput> rows) {
         int created = 0;
+        int updated = 0;
         int unchanged = 0;
 
         for (var row : rows) {
-            int affectedRows = jdbcTemplate.update("""
+            int insertedRows = jdbcTemplate.update("""
                     INSERT INTO program_record (
                         source_id,
                         region_code,
@@ -39,8 +40,30 @@ public class ProgramImportService {
                     row.sourceUpdatedAt()
             );
 
-            if (affectedRows == 1) {
+            if (insertedRows == 1) {
                 created++;
+                continue;
+            }
+
+            int updatedRows = jdbcTemplate.update("""
+                    UPDATE program_record
+                    SET region_code = ?,
+                        status = ?,
+                        area_hectares = ?,
+                        source_updated_at = ?
+                    WHERE source_id = ?
+                    AND source_updated_at < ?
+                    """,
+                    row.regionCode(),
+                    row.status(),
+                    row.areaHectares(),
+                    row.sourceUpdatedAt(),
+                    row.sourceId(),
+                    row.sourceUpdatedAt()
+            );
+
+            if (updatedRows == 1) {
+                updated++;
             } else {
                 unchanged++;
             }
@@ -49,7 +72,7 @@ public class ProgramImportService {
         return new ImportResult(
                 rows.size(),
                 created,
-                0,
+                updated,
                 unchanged,
                 0
         );
