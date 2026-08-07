@@ -146,4 +146,68 @@ public class ProgramImportServiceTest {
 
                 assertThat(storedRecords).isEqualTo(1L);
         }
+
+        @Test
+        void importingAnOlderVersionLeavesTheNewerStoredRecordUnchanged() {
+                var newerRecord = new ProgramRecordInput(
+                        SOURCE_ID,
+                        "SK",
+                        "COMPLETED",
+                        new BigDecimal("18.75"),
+                        OffsetDateTime.parse("2026-08-02T14:00:00Z")
+                );
+
+                var olderRecord = new ProgramRecordInput(
+                        SOURCE_ID,
+                        "MB",
+                        "ACTIVE",
+                        new BigDecimal("12.50"),
+                        OffsetDateTime.parse("2026-08-01T14:00:00Z")
+                );
+
+                importService.importRows(List.of(newerRecord));
+
+                var result = importService.importRows(List.of(olderRecord));
+
+                assertThat(result)
+                        .isEqualTo(new ImportResult(
+                                1, // received
+                                0, // created
+                                0, // updated
+                                1, // unchanged
+                                0  // rejected
+                        ));
+
+                var storedRecord = jdbcTemplate.queryForObject("""
+                        SELECT
+                                source_id,
+                                region_code,
+                                status,
+                                area_hectares,
+                                source_updated_at
+                        FROM program_record
+                        WHERE source_id = ?
+                        """,
+                        (resultSet, rowNumber) -> new ProgramRecordInput(
+                                resultSet.getString("source_id"),
+                                resultSet.getString("region_code"),
+                                resultSet.getString("status"),
+                                resultSet.getBigDecimal("area_hectares"),
+                                resultSet.getObject(
+                                        "source_updated_at",
+                                        OffsetDateTime.class
+                                )
+                        ),
+                        SOURCE_ID
+                );
+
+                assertThat(storedRecord.regionCode()).isEqualTo("SK");
+                assertThat(storedRecord.status()).isEqualTo("COMPLETED");
+                assertThat(storedRecord.areaHectares())
+                        .isEqualByComparingTo("18.75");
+                assertThat(storedRecord.sourceUpdatedAt())
+                        .isEqualTo(OffsetDateTime.parse(
+                                "2026-08-02T14:00:00Z"
+                        ));
+        }
 }
