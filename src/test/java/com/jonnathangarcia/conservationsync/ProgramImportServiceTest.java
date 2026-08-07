@@ -210,4 +210,34 @@ public class ProgramImportServiceTest {
                                 "2026-08-02T14:00:00Z"
                         ));
         }
+
+        @Test
+        void importingARecordWithAnUnsupportedStatusRejectsItWithoutWritingCanonicalData() {
+                var invalidRecord = new ProgramRecordInput(
+                        SOURCE_ID,
+                        "MB",
+                        "NOT_A_VALID_STATUS",
+                        new BigDecimal("12.50"),
+                        OffsetDateTime.parse("2026-08-01T14:00:00Z")
+                );
+
+                var result = importService.importRows(List.of(invalidRecord));
+
+                var storedRecords = jdbcTemplate.queryForObject("""
+                        SELECT COUNT(*)
+                        FROM program_record
+                        WHERE source_id = ?
+                        """, Long.class, SOURCE_ID);
+
+                assertThat(storedRecords).isZero();
+
+                assertThat(result)
+                        .isEqualTo(new ImportResult(
+                                1, // received
+                                0, // created
+                                0, // updated
+                                0, // unchanged
+                                1  // rejected
+                        ));
+        }
 }
