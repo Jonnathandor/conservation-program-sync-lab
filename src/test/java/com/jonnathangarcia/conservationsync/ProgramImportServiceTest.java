@@ -30,6 +30,11 @@ public class ProgramImportServiceTest {
                         DELETE FROM program_record
                         WHERE source_id = ?
                         """, SOURCE_ID);
+
+                jdbcTemplate.update("""
+                        DELETE FROM program_record_quarantine
+                        WHERE source_id = ?
+                        """, SOURCE_ID);
         }
 
         @Test
@@ -212,7 +217,7 @@ public class ProgramImportServiceTest {
         }
 
         @Test
-        void importingARecordWithAnUnsupportedStatusRejectsItWithoutWritingCanonicalData() {
+        void importingARecordWithAnUnsupportedStatusQuarantinesItWithoutWritingCanonicalData() {
                 var invalidRecord = new ProgramRecordInput(
                         SOURCE_ID,
                         "MB",
@@ -239,5 +244,22 @@ public class ProgramImportServiceTest {
                                 0, // unchanged
                                 1  // rejected
                         ));
+
+                var quarantinedRecord = jdbcTemplate.queryForMap("""
+                        SELECT
+                                source_id,
+                                status,
+                                rejection_reason
+                        FROM program_record_quarantine
+                        WHERE source_id = ?
+                        """, SOURCE_ID);
+
+                assertThat(quarantinedRecord)
+                        .containsEntry("source_id", SOURCE_ID)
+                        .containsEntry("status", "NOT_A_VALID_STATUS")
+                        .containsEntry(
+                                "rejection_reason",
+                                "Unsupported status: NOT_A_VALID_STATUS"
+                        );
         }
 }

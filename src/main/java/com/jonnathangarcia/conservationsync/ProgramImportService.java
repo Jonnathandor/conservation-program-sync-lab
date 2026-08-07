@@ -29,6 +29,28 @@ public class ProgramImportService {
         for (var row : rows) {
 
             if (row.status() == null || !SUPPORTED_STATUSES.contains(row.status())) {
+                jdbcTemplate.update("""
+                    INSERT INTO program_record_quarantine (
+                        source_id,
+                        region_code,
+                        status,
+                        area_hectares,
+                        source_updated_at,
+                        rejection_reason
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    row.sourceId(),
+                    row.regionCode(),
+                    row.status(),
+                    row.areaHectares() == null
+                            ? null
+                            : row.areaHectares().toPlainString(),
+                    row.sourceUpdatedAt() == null
+                            ? null
+                            : row.sourceUpdatedAt().toString(),
+                    "Unsupported status: " + row.status()
+                );
                 rejected++;
                 continue;
             }
