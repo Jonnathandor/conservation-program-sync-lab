@@ -34,6 +34,6 @@ public class ProgramImportController {
 
         var rows = csvParser.parse(file.getInputStream());
 
-        return importService.importRows(rows);
+        return importService.importCsvRows(rows);
     }
 }

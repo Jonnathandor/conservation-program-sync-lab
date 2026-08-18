@@ -1,5 +1,8 @@
 package com.jonnathangarcia.conservationsync;
 
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -11,12 +14,51 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProgramImportService {
 
     private static final Set<String> SUPPORTED_STATUSES =
-        Set.of("PLANNED", "ACTIVE", "COMPLETED");
+            Set.of("PLANNED", "ACTIVE", "COMPLETED");
 
     private final JdbcTemplate jdbcTemplate;
 
     public ProgramImportService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @Transactional
+    public ImportResult importCsvRows(List<ProgramCsvRow> rows) {
+        var validRows = new ArrayList<ProgramRecordInput>();
+        int malformedRejected = 0;
+
+        for (var row : rows) {
+            final BigDecimal areaHectares;
+
+            try {
+                areaHectares = new BigDecimal(row.areaHectares());
+            } catch (NumberFormatException exception) {
+                quarantineMalformedRow(
+                        row,
+                        "Invalid area_hectares: " + row.areaHectares()
+                );
+                malformedRejected++;
+                continue;
+            }
+
+            validRows.add(new ProgramRecordInput(
+                    row.sourceId(),
+                    row.regionCode(),
+                    row.status(),
+                    areaHectares,
+                    OffsetDateTime.parse(row.sourceUpdatedAt())
+            ));
+        }
+
+        var imported = importRows(validRows);
+
+        return new ImportResult(
+                rows.size(),
+                imported.created(),
+                imported.updated(),
+                imported.unchanged(),
+                imported.rejected() + malformedRejected
+        );
     }
 
     @Transactional
@@ -28,32 +70,34 @@ public class ProgramImportService {
 
         for (var row : rows) {
 
-            if (row.status() == null || !SUPPORTED_STATUSES.contains(row.status())) {
+            if (row.status() == null
+                    || !SUPPORTED_STATUSES.contains(row.status())) {
                 jdbcTemplate.update("""
-                    INSERT INTO program_record_quarantine (
-                        source_id,
-                        region_code,
-                        status,
-                        area_hectares,
-                        source_updated_at,
-                        rejection_reason
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    row.sourceId(),
-                    row.regionCode(),
-                    row.status(),
-                    row.areaHectares() == null
-                            ? null
-                            : row.areaHectares().toPlainString(),
-                    row.sourceUpdatedAt() == null
-                            ? null
-                            : row.sourceUpdatedAt().toString(),
-                    "Unsupported status: " + row.status()
+                        INSERT INTO program_record_quarantine (
+                            source_id,
+                            region_code,
+                            status,
+                            area_hectares,
+                            source_updated_at,
+                            rejection_reason
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        row.sourceId(),
+                        row.regionCode(),
+                        row.status(),
+                        row.areaHectares() == null
+                                ? null
+                                : row.areaHectares().toPlainString(),
+                        row.sourceUpdatedAt() == null
+                                ? null
+                                : row.sourceUpdatedAt().toString(),
+                        "Unsupported status: " + row.status()
                 );
                 rejected++;
                 continue;
             }
+
             int insertedRows = jdbcTemplate.update("""
                     INSERT INTO program_record (
                         source_id,
@@ -107,6 +151,30 @@ public class ProgramImportService {
                 updated,
                 unchanged,
                 rejected
+        );
+    }
+
+    private void quarantineMalformedRow(
+            ProgramCsvRow row,
+            String rejectionReason
+    ) {
+        jdbcTemplate.update("""
+                INSERT INTO program_record_quarantine (
+                    source_id,
+                    region_code,
+                    status,
+                    area_hectares,
+                    source_updated_at,
+                    rejection_reason
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                row.sourceId(),
+                row.regionCode(),
+                row.status(),
+                row.areaHectares(),
+                row.sourceUpdatedAt(),
+                rejectionReason
         );
     }
 }

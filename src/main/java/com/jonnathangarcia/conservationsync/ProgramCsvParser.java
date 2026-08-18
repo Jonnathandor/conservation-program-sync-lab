@@ -3,9 +3,7 @@ package com.jonnathangarcia.conservationsync;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,10 +19,10 @@ public class ProgramCsvParser {
             .setTrim(true)
             .get();
 
-    public List<ProgramRecordInput> parse(InputStream inputStream)
+    public List<ProgramCsvRow> parse(InputStream inputStream)
             throws IOException {
 
-        var rows = new ArrayList<ProgramRecordInput>();
+        var rows = new ArrayList<ProgramCsvRow>();
 
         try (
                 var reader = new InputStreamReader(
@@ -34,14 +32,12 @@ public class ProgramCsvParser {
                 var parser = FORMAT.parse(reader)
         ) {
             for (var csvRecord : parser) {
-                rows.add(new ProgramRecordInput(
+                rows.add(new ProgramCsvRow(
                         csvRecord.get("source_id"),
                         csvRecord.get("region_code"),
                         csvRecord.get("status"),
-                        new BigDecimal(csvRecord.get("area_hectares")),
-                        OffsetDateTime.parse(
-                                csvRecord.get("source_updated_at")
-                        )
+                        csvRecord.get("area_hectares"),
+                        csvRecord.get("source_updated_at")
                 ));
             }
         }
