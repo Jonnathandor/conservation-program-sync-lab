@@ -80,7 +80,7 @@ After two uploads, expect one canonical row and two quarantine rows. Exit psql w
 ./gradlew test --console=plain
 ```
 
-Tests use Docker-backed PostgreSQL 17 Alpine. The 10 test methods cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, and mixed uploads with malformed areas/timestamps. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
+Tests use Docker-backed PostgreSQL 17 Alpine. The 11 test methods cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, mixed uploads with malformed areas/timestamps, and rollback of both canonical and quarantine writes after an unexpected database failure. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
 
 Known limits: no UI, authentication, deployment setup, quarantine management endpoint, or durable import audit. CSV is loaded into memory. Missing headers, structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
 
