@@ -46,6 +46,23 @@ public class ProgramImportAcceptanceTest {
             )
             .getBytes(StandardCharsets.UTF_8);
 
+    private static final String MALFORMED_TIMESTAMP_VALID_SOURCE_ID =
+            "SYN-MALFORMED-TIME-VALID-001";
+
+    private static final String MALFORMED_TIMESTAMP_SOURCE_ID =
+            "SYN-MALFORMED-TIME-001";
+
+    private static final byte[] MALFORMED_TIMESTAMP_CSV = """
+            source_id,region_code,status,area_hectares,source_updated_at
+            %s,MB,ACTIVE,40.00,2026-08-05T14:00:00Z
+            %s,SK,ACTIVE,15.00,bad-date
+            """
+            .formatted(
+                    MALFORMED_TIMESTAMP_VALID_SOURCE_ID,
+                    MALFORMED_TIMESTAMP_SOURCE_ID
+            )
+            .getBytes(StandardCharsets.UTF_8);
+
     private static final String MALFORMED_VALID_SOURCE_ID =
             "SYN-MALFORMED-VALID-001";
 
@@ -224,6 +241,67 @@ public class ProgramImportAcceptanceTest {
                 .containsEntry(
                         "rejection_reason",
                         "Invalid area_hectares: twelve"
+                );
+    }
+
+    @Test
+    void importingMalformedTimestampQuarantinesBadRowWithoutStoppingValidRow()
+            throws Exception {
+
+        var file = new MockMultipartFile(
+                "file",
+                "malformed-timestamp.csv",
+                "text/csv",
+                MALFORMED_TIMESTAMP_CSV
+        );
+
+        mockMvc.perform(
+                        multipart("/api/imports").file(file)
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.received").value(2))
+                .andExpect(jsonPath("$.created").value(1))
+                .andExpect(jsonPath("$.updated").value(0))
+                .andExpect(jsonPath("$.unchanged").value(0))
+                .andExpect(jsonPath("$.rejected").value(1));
+
+        var canonicalRows = jdbcTemplate.queryForList("""
+                SELECT source_id
+                FROM program_record
+                WHERE source_id IN (?, ?)
+                """,
+                MALFORMED_TIMESTAMP_VALID_SOURCE_ID,
+                MALFORMED_TIMESTAMP_SOURCE_ID
+        );
+
+        assertThat(canonicalRows).hasSize(1);
+        assertThat(canonicalRows.get(0))
+                .containsEntry(
+                        "source_id",
+                        MALFORMED_TIMESTAMP_VALID_SOURCE_ID
+                );
+
+        var quarantinedRows = jdbcTemplate.queryForList("""
+                SELECT
+                    source_id,
+                    source_updated_at,
+                    rejection_reason
+                FROM program_record_quarantine
+                WHERE source_id = ?
+                """,
+                MALFORMED_TIMESTAMP_SOURCE_ID
+        );
+
+        assertThat(quarantinedRows).hasSize(1);
+        assertThat(quarantinedRows.get(0))
+                .containsEntry(
+                        "source_id",
+                        MALFORMED_TIMESTAMP_SOURCE_ID
+                )
+                .containsEntry("source_updated_at", "bad-date")
+                .containsEntry(
+                        "rejection_reason",
+                        "Invalid source_updated_at: bad-date"
                 );
     }
 

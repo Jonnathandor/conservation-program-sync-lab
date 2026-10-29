@@ -2,6 +2,7 @@ package com.jonnathangarcia.conservationsync;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -41,12 +42,28 @@ public class ProgramImportService {
                 continue;
             }
 
+            final OffsetDateTime sourceUpdatedAt;
+
+            try {
+                sourceUpdatedAt = OffsetDateTime.parse(
+                        row.sourceUpdatedAt()
+                );
+            } catch (DateTimeParseException exception) {
+                quarantineMalformedRow(
+                        row,
+                        "Invalid source_updated_at: "
+                                + row.sourceUpdatedAt()
+                );
+                malformedRejected++;
+                continue;
+            }
+
             validRows.add(new ProgramRecordInput(
                     row.sourceId(),
                     row.regionCode(),
                     row.status(),
                     areaHectares,
-                    OffsetDateTime.parse(row.sourceUpdatedAt())
+                    sourceUpdatedAt
             ));
         }
 
