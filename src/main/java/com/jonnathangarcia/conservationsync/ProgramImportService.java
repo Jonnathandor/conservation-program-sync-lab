@@ -1,8 +1,8 @@
 package com.jonnathangarcia.conservationsync;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -14,8 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProgramImportService {
 
-    private static final Set<String> SUPPORTED_STATUSES =
-            Set.of("PLANNED", "ACTIVE", "COMPLETED");
+    private static final Set<String> SUPPORTED_STATUSES = Set.of("PLANNED", "ACTIVE", "COMPLETED");
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -36,8 +35,7 @@ public class ProgramImportService {
             } catch (NumberFormatException exception) {
                 quarantineMalformedRow(
                         row,
-                        "Invalid area_hectares: " + row.areaHectares()
-                );
+                        "Invalid area_hectares: " + row.areaHectares());
                 malformedRejected++;
                 continue;
             }
@@ -46,14 +44,12 @@ public class ProgramImportService {
 
             try {
                 sourceUpdatedAt = OffsetDateTime.parse(
-                        row.sourceUpdatedAt()
-                );
+                        row.sourceUpdatedAt());
             } catch (DateTimeParseException exception) {
                 quarantineMalformedRow(
                         row,
                         "Invalid source_updated_at: "
-                                + row.sourceUpdatedAt()
-                );
+                                + row.sourceUpdatedAt());
                 malformedRejected++;
                 continue;
             }
@@ -63,8 +59,7 @@ public class ProgramImportService {
                     row.regionCode(),
                     row.status(),
                     areaHectares,
-                    sourceUpdatedAt
-            ));
+                    sourceUpdatedAt));
         }
 
         var imported = importRows(validRows);
@@ -74,8 +69,7 @@ public class ProgramImportService {
                 imported.created(),
                 imported.updated(),
                 imported.unchanged(),
-                imported.rejected() + malformedRejected
-        );
+                imported.rejected() + malformedRejected);
     }
 
     @Transactional
@@ -109,8 +103,7 @@ public class ProgramImportService {
                         row.sourceUpdatedAt() == null
                                 ? null
                                 : row.sourceUpdatedAt().toString(),
-                        "Unsupported status: " + row.status()
-                );
+                        "Unsupported status: " + row.status());
                 rejected++;
                 continue;
             }
@@ -130,8 +123,7 @@ public class ProgramImportService {
                     row.regionCode(),
                     row.status(),
                     row.areaHectares(),
-                    row.sourceUpdatedAt()
-            );
+                    row.sourceUpdatedAt());
 
             if (insertedRows == 1) {
                 created++;
@@ -152,8 +144,7 @@ public class ProgramImportService {
                     row.areaHectares(),
                     row.sourceUpdatedAt(),
                     row.sourceId(),
-                    row.sourceUpdatedAt()
-            );
+                    row.sourceUpdatedAt());
 
             if (updatedRows == 1) {
                 updated++;
@@ -167,14 +158,12 @@ public class ProgramImportService {
                 created,
                 updated,
                 unchanged,
-                rejected
-        );
+                rejected);
     }
 
     private void quarantineMalformedRow(
             ProgramCsvRow row,
-            String rejectionReason
-    ) {
+            String rejectionReason) {
         jdbcTemplate.update("""
                 INSERT INTO program_record_quarantine (
                     source_id,
@@ -191,7 +180,6 @@ public class ProgramImportService {
                 row.status(),
                 row.areaHectares(),
                 row.sourceUpdatedAt(),
-                rejectionReason
-        );
+                rejectionReason);
     }
 }
