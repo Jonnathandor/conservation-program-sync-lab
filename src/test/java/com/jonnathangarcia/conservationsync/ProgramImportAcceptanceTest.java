@@ -7,12 +7,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,6 +57,24 @@ public class ProgramImportAcceptanceTest {
                         .formatted(
                                         MALFORMED_TIMESTAMP_VALID_SOURCE_ID,
                                         MALFORMED_TIMESTAMP_SOURCE_ID)
+                        .getBytes(StandardCharsets.UTF_8);
+
+        private static final String ROLLBACK_QUARANTINE_SOURCE_ID = "SYN-ROLLBACK-QUARANTINE-001";
+
+        private static final String ROLLBACK_VALID_SOURCE_ID = "SYN-ROLLBACK-VALID-001";
+
+        private static final String ROLLBACK_FAILURE_SOURCE_ID = "SYN-ROLLBACK-FAILURE-001";
+
+        private static final byte[] TRANSACTION_ROLLBACK_CSV = """
+                        source_id,region_code,status,area_hectares,source_updated_at
+                        %s,MB,ACTIVE,10.00,bad-date
+                        %s,MB,ACTIVE,20.00,2026-08-06T14:00:00Z
+                        %s,REGION-TOO-LONG,ACTIVE,30.00,2026-08-06T15:00:00Z
+                        """
+                        .formatted(
+                                        ROLLBACK_QUARANTINE_SOURCE_ID,
+                                        ROLLBACK_VALID_SOURCE_ID,
+                                        ROLLBACK_FAILURE_SOURCE_ID)
                         .getBytes(StandardCharsets.UTF_8);
 
         private static final String MALFORMED_VALID_SOURCE_ID = "SYN-MALFORMED-VALID-001";
@@ -272,6 +292,40 @@ public class ProgramImportAcceptanceTest {
                                 .containsEntry(
                                                 "rejection_reason",
                                                 "Invalid source_updated_at: bad-date");
+        }
+
+        @Test
+        void unexpectedDatabaseFailureRollsBackValidAndQuarantineRecords() {
+                var file = new MockMultipartFile(
+                                "file",
+                                "transaction-rollback.csv",
+                                "text/csv",
+                                TRANSACTION_ROLLBACK_CSV);
+
+                assertThatThrownBy(() -> mockMvc.perform(
+                                multipart("/api/imports").file(file)))
+                                .hasCauseInstanceOf(
+                                                DataIntegrityViolationException.class);
+
+                var canonicalRecords = jdbcTemplate.queryForObject("""
+                                SELECT COUNT(*)
+                                FROM program_record
+                                WHERE source_id = ?
+                                """,
+                                Long.class,
+                                ROLLBACK_VALID_SOURCE_ID);
+
+                assertThat(canonicalRecords).isZero();
+
+                var quarantinedRecords = jdbcTemplate.queryForObject("""
+                                SELECT COUNT(*)
+                                FROM program_record_quarantine
+                                WHERE source_id = ?
+                                """,
+                                Long.class,
+                                ROLLBACK_QUARANTINE_SOURCE_ID);
+
+                assertThat(quarantinedRecords).isZero();
         }
 
         private ResultActions importCsv() throws Exception {
