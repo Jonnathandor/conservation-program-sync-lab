@@ -1,0 +1,249 @@
+package com.jonnathangarcia.conservationsync;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest
+@Import(TestcontainersConfiguration.class)
+public class ProgramImportServiceTest {
+        private static final String SOURCE_ID = "SYN-SERVICE-001";
+
+        @Autowired
+        private ProgramImportService importService;
+
+        @Autowired
+        private JdbcTemplate jdbcTemplate;
+
+        @BeforeEach
+        void removeExistingFixture() {
+                jdbcTemplate.update("""
+                                DELETE FROM program_record
+                                WHERE source_id = ?
+                                """, SOURCE_ID);
+
+                jdbcTemplate.update("""
+                                DELETE FROM program_record_quarantine
+                                WHERE source_id = ?
+                                """, SOURCE_ID);
+        }
+
+        @Test
+        void importingAnIdenticalRecordTwiceReportsCreatedThenUnchanged() {
+                var record = new ProgramRecordInput(
+                                SOURCE_ID,
+                                "MB",
+                                "ACTIVE",
+                                new BigDecimal("12.50"),
+                                OffsetDateTime.parse("2026-08-01T14:00:00Z"));
+
+                var firstImport = importService.importRows(List.of(record));
+
+                assertThat(firstImport)
+                                .isEqualTo(new ImportResult(
+                                                1, // received
+                                                1, // created
+                                                0, // updated
+                                                0, // unchanged
+                                                0 // rejected
+                                ));
+
+                var secondImport = importService.importRows(List.of(record));
+
+                assertThat(secondImport)
+                                .isEqualTo(new ImportResult(
+                                                1,
+                                                0,
+                                                0,
+                                                1,
+                                                0));
+
+                var storedRecords = jdbcTemplate.queryForObject("""
+                                SELECT COUNT(*)
+                                FROM program_record
+                                WHERE source_id = ?
+                                """, Long.class, SOURCE_ID);
+
+                assertThat(storedRecords).isEqualTo(1L);
+        }
+
+        @Test
+        void importingANewerVersionUpdatesTheExistingRecordWithoutCreatingADuplicate() {
+                var originalRecord = new ProgramRecordInput(
+                                SOURCE_ID,
+                                "MB",
+                                "ACTIVE",
+                                new BigDecimal("12.50"),
+                                OffsetDateTime.parse("2026-08-01T14:00:00Z"));
+
+                var newerRecord = new ProgramRecordInput(
+                                SOURCE_ID,
+                                "MB",
+                                "COMPLETED",
+                                new BigDecimal("18.75"),
+                                OffsetDateTime.parse("2026-08-02T14:00:00Z"));
+
+                importService.importRows(List.of(originalRecord));
+
+                var result = importService.importRows(List.of(newerRecord));
+
+                assertThat(result)
+                                .isEqualTo(new ImportResult(
+                                                1, // received
+                                                0, // created
+                                                1, // updated
+                                                0, // unchanged
+                                                0 // rejected
+                                ));
+
+                var storedRecord = jdbcTemplate.queryForObject("""
+                                SELECT
+                                        source_id,
+                                        region_code,
+                                        status,
+                                        area_hectares,
+                                        source_updated_at
+                                FROM program_record
+                                WHERE source_id = ?
+                                """,
+                                (resultSet, rowNumber) -> new ProgramRecordInput(
+                                                resultSet.getString("source_id"),
+                                                resultSet.getString("region_code"),
+                                                resultSet.getString("status"),
+                                                resultSet.getBigDecimal("area_hectares"),
+                                                resultSet.getObject(
+                                                                "source_updated_at",
+                                                                OffsetDateTime.class)),
+                                SOURCE_ID);
+
+                assertThat(storedRecord.status())
+                                .isEqualTo("COMPLETED");
+
+                assertThat(storedRecord.areaHectares())
+                                .isEqualByComparingTo("18.75");
+
+                assertThat(storedRecord.sourceUpdatedAt())
+                                .isEqualTo(OffsetDateTime.parse(
+                                                "2026-08-02T14:00:00Z"));
+
+                var storedRecords = jdbcTemplate.queryForObject("""
+                                SELECT COUNT(*)
+                                FROM program_record
+                                WHERE source_id = ?
+                                """, Long.class, SOURCE_ID);
+
+                assertThat(storedRecords).isEqualTo(1L);
+        }
+
+        @Test
+        void importingAnOlderVersionLeavesTheNewerStoredRecordUnchanged() {
+                var newerRecord = new ProgramRecordInput(
+                                SOURCE_ID,
+                                "SK",
+                                "COMPLETED",
+                                new BigDecimal("18.75"),
+                                OffsetDateTime.parse("2026-08-02T14:00:00Z"));
+
+                var olderRecord = new ProgramRecordInput(
+                                SOURCE_ID,
+                                "MB",
+                                "ACTIVE",
+                                new BigDecimal("12.50"),
+                                OffsetDateTime.parse("2026-08-01T14:00:00Z"));
+
+                importService.importRows(List.of(newerRecord));
+
+                var result = importService.importRows(List.of(olderRecord));
+
+                assertThat(result)
+                                .isEqualTo(new ImportResult(
+                                                1, // received
+                                                0, // created
+                                                0, // updated
+                                                1, // unchanged
+                                                0 // rejected
+                                ));
+
+                var storedRecord = jdbcTemplate.queryForObject("""
+                                SELECT
+                                        source_id,
+                                        region_code,
+                                        status,
+                                        area_hectares,
+                                        source_updated_at
+                                FROM program_record
+                                WHERE source_id = ?
+                                """,
+                                (resultSet, rowNumber) -> new ProgramRecordInput(
+                                                resultSet.getString("source_id"),
+                                                resultSet.getString("region_code"),
+                                                resultSet.getString("status"),
+                                                resultSet.getBigDecimal("area_hectares"),
+                                                resultSet.getObject(
+                                                                "source_updated_at",
+                                                                OffsetDateTime.class)),
+                                SOURCE_ID);
+
+                assertThat(storedRecord.regionCode()).isEqualTo("SK");
+                assertThat(storedRecord.status()).isEqualTo("COMPLETED");
+                assertThat(storedRecord.areaHectares())
+                                .isEqualByComparingTo("18.75");
+                assertThat(storedRecord.sourceUpdatedAt())
+                                .isEqualTo(OffsetDateTime.parse(
+                                                "2026-08-02T14:00:00Z"));
+        }
+
+        @Test
+        void importingARecordWithAnUnsupportedStatusQuarantinesItWithoutWritingCanonicalData() {
+                var invalidRecord = new ProgramRecordInput(
+                                SOURCE_ID,
+                                "MB",
+                                "NOT_A_VALID_STATUS",
+                                new BigDecimal("12.50"),
+                                OffsetDateTime.parse("2026-08-01T14:00:00Z"));
+
+                var result = importService.importRows(List.of(invalidRecord));
+
+                var storedRecords = jdbcTemplate.queryForObject("""
+                                SELECT COUNT(*)
+                                FROM program_record
+                                WHERE source_id = ?
+                                """, Long.class, SOURCE_ID);
+
+                assertThat(storedRecords).isZero();
+
+                assertThat(result)
+                                .isEqualTo(new ImportResult(
+                                                1, // received
+                                                0, // created
+                                                0, // updated
+                                                0, // unchanged
+                                                1 // rejected
+                                ));
+
+                var quarantinedRecord = jdbcTemplate.queryForMap("""
+                                SELECT
+                                        source_id,
+                                        status,
+                                        rejection_reason
+                                FROM program_record_quarantine
+                                WHERE source_id = ?
+                                """, SOURCE_ID);
+
+                assertThat(quarantinedRecord)
+                                .containsEntry("source_id", SOURCE_ID)
+                                .containsEntry("status", "NOT_A_VALID_STATUS")
+                                .containsEntry(
+                                                "rejection_reason",
+                                                "Unsupported status: NOT_A_VALID_STATUS");
+        }
+}

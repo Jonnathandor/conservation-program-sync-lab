@@ -1,0 +1,3 @@
+source_id,region_code,status,area_hectares,source_updated_at
+SYN-DEMO-VALID-001,MB,ACTIVE,40.00,2026-08-05T14:00:00Z
+SYN-DEMO-BAD-TIME-001,SK,ACTIVE,15.00,bad-date
