@@ -63,9 +63,36 @@ A new source ID is created. An existing ID updates only when the incoming timest
 
 Unsupported statuses, malformed decimals, and malformed timestamps are quarantined with a reason while valid rows continue. One upload is a single transaction: an unexpected database/runtime error rolls back its canonical and quarantine writes. Parsing happens before this transaction. This is row rejection for the explicitly handled cases, not a guarantee that every invalid input can be imported partially.
 
+## Completed import receipts
+
+Every completed CSV upload now saves an independent receipt in the same transaction as its canonical/quarantine writes. A completion may include rejected rows: the receipt records the returned counters, not a claim that all rows were valid. Reuploading creates a new receipt while canonical record idempotency stays unchanged. Invalid headers or an unexpected database failure leave no receipt. Failed attempts, crash recovery and retries are not recorded by this slice.
+
+The POST response remains HTTP 201 with exactly the existing five-counter JSON body. An additive `Location` header tells the caller where to retrieve the saved receipt. Show it with:
+
+```sh
+curl --fail-with-body -i http://localhost:8080/api/imports \
+  -F 'file=@examples/demo-import.csv'
+```
+
+Replace `<uuid>` below with the ID in the returned `Location` path:
+
+```sh
+curl --fail-with-body 'http://localhost:8080/api/imports/<uuid>'
+```
+
+`GET /api/imports/{id}` returns HTTP 200 with this shape (values illustrative):
+
+```json
+{"id":"f2f3e5d8-f1ed-4f98-85bf-8b6305dd48f0","completedAt":"2026-10-30T04:00:00Z","result":{"received":2,"created":1,"updated":0,"unchanged":0,"rejected":1}}
+```
+
+`completedAt` is the database timestamp when the receipt is inserted after row processing, before transaction commit. It survives only if that transaction commits. The receipt stores no filename, raw CSV, source IDs, or personal data. An unknown well-formed UUID returns HTTP 404 with `{"code":"IMPORT_RECEIPT_NOT_FOUND","message":"No completed import receipt exists for this ID."}`. Malformed UUIDs return HTTP 400 through Spring's existing conversion handling; no custom body is promised for that case.
+
+The lookup currently has no authentication or ownership rules. UUIDs reduce accidental guessing but are not access control. Use only the local synthetic demo; do not expose this API publicly before authentication and authorization are designed. There is no list/history screen yet. The default Testcontainers demo is disposable: receipts disappear with its database, while the application itself persists them in PostgreSQL.
+
 ## Inspect and clean up the demo
 
-`V1__create_program_record_table.sql` creates `program_record` with a unique `source_id`; `V2__create_program_record_quarantine_table.sql` stores rejected raw values, rejection reasons, and quarantine timestamps. Both live under `src/main/resources/db/migration/`.
+`V1__create_program_record_table.sql` creates `program_record` with a unique `source_id`; `V2__create_program_record_quarantine_table.sql` stores rejected raw values, rejection reasons, and quarantine timestamps. `V3__create_import_receipt_table.sql` adds UUID receipt identity, completion time and the five counters with consistency constraints. All three live under `src/main/resources/db/migration/`.
 
 Find the PostgreSQL container started for this run from the Testcontainers startup log. Verify its ID against `docker ps` and use only that disposable container, never an unrelated database:
 
@@ -82,7 +109,7 @@ SELECT source_id, source_updated_at, rejection_reason
 FROM program_record_quarantine WHERE source_id = 'SYN-DEMO-BAD-TIME-001';
 ```
 
-After two uploads, expect one canonical row and two quarantine rows. Exit psql with `\q`. Stop the demo with Ctrl-C in its startup terminal; Testcontainers/Ryuk normally removes its disposable containers. If an interrupted run leaves a container behind, verify the exact ID belongs to this demo before removing that container only. Do not prune containers or volumes globally. Restart with a fresh disposable instance to reset the demonstration; no persistent database cleanup is needed.
+After two uploads, expect one canonical row, two quarantine rows and two receipts on fresh demo data. Inspect receipts with `SELECT * FROM import_receipt ORDER BY completed_at;`. Exit psql with `\q`. Stop the demo with Ctrl-C in its startup terminal; Testcontainers/Ryuk normally removes its disposable containers. If an interrupted run leaves a container behind, verify the exact ID belongs to this demo before removing that container only. Do not prune containers or volumes globally. Restart with a fresh disposable instance to reset the demonstration; no persistent database cleanup is needed.
 
 ## Tests and boundaries
 
@@ -90,8 +117,8 @@ After two uploads, expect one canonical row and two quarantine rows. Exit psql w
 ./gradlew test --console=plain
 ```
 
-Tests use Docker-backed PostgreSQL 17 Alpine. The integration tests cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, mixed uploads with malformed areas/timestamps, rollback of both canonical and quarantine writes after an unexpected database failure, and header rejection with no database writes. Header tests also cover reordered/trimmed names, wrong case, empty files, header-only files, and rejection before a broken data row is parsed. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
+Tests use Docker-backed PostgreSQL 17 Alpine. The integration tests cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, mixed uploads with malformed areas/timestamps, rollback of both canonical and quarantine writes after an unexpected database failure, header rejection with no database writes, and receipt persistence/retrieval, reimport, 404 behavior and rollback when the receipt insert itself fails. Header tests also cover reordered/trimmed names, wrong case, empty files, header-only files, and rejection before a broken data row is parsed. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
 
-Known limits: no UI, authentication, deployment setup, quarantine management endpoint, or durable import audit. CSV is loaded into memory. Structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
+Known limits: no UI, authentication, deployment setup, quarantine management endpoint, or failed-attempt lifecycle audit (completed receipts are available). CSV is loaded into memory. Structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
 
 The lab is complete when a new reader can run this demo, explain its counters and quarantine behavior, and run the existing suite. New product features are outside this milestone. Historical test results are not a guarantee of the current checkout; use an actual test run for current evidence.

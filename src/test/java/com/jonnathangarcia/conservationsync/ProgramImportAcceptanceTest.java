@@ -296,6 +296,8 @@ public class ProgramImportAcceptanceTest {
 
         @Test
         void unexpectedDatabaseFailureRollsBackValidAndQuarantineRecords() {
+                var receiptsBefore = jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM import_receipt", Long.class);
                 var file = new MockMultipartFile(
                                 "file",
                                 "transaction-rollback.csv",
@@ -326,6 +328,9 @@ public class ProgramImportAcceptanceTest {
                                 ROLLBACK_QUARANTINE_SOURCE_ID);
 
                 assertThat(quarantinedRecords).isZero();
+                assertThat(jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM import_receipt", Long.class))
+                                .isEqualTo(receiptsBefore);
         }
 
         private ResultActions importCsv() throws Exception {

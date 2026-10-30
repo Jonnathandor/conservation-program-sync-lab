@@ -12,7 +12,7 @@ Implemented evidence:
 - `src/test/java/com/jonnathangarcia/conservationsync/`: integration coverage for rollback of canonical/quarantine writes on unexpected database failure and file-level header rejection without database writes.
 - `README.md` and `examples/demo-import.csv`: reproducible disposable demo and documented boundaries.
 
-There is currently no application sign-in, browser UI, durable import lifecycle/audit, reporting, or outbound delivery.
+Completed upload receipts now persist an ID, processing-completion timestamp and counters, retrievable through the POST Location header. There is currently no application sign-in, browser UI, failed-attempt lifecycle/audit, reporting, or outbound delivery.
 
 ## Accepted technical direction
 
@@ -37,6 +37,8 @@ These journeys guide slices; they do not approve every underlying business rule 
 | 4. Record and exception review | Steward can inspect records and reasons and follow correction/resubmission lineage; manager summary/freshness values reconcile with fixtures under agreed definitions. |
 | 5. Mock delivery and recovery | Durable mock outbound work demonstrates retries, idempotency and a traceable final outcome without a real external system. |
 | 6. Release proof | CI runs relevant checks; accessibility, security/access control and bounded load checks have recorded results; container deployment/demo, recovery and cleanup are reproducible. Public hosting requires suitable controls and explicit cost/deployment approval. |
+
+Milestone 2's first bounded slice saves completed CSV import receipts atomically with data writes and retrieves them by ID. It does not record failed or interrupted attempts, add lifecycle states, or provide a history list. Those still require explicit failure/retry design before broader lifecycle work. The next user-facing direction remains the browser upload/history journey, rather than unrelated backend expansion.
 
 Milestone 1's bounded **CSV header validation** slice is implemented locally under the contract below, with HTTP/database tests. Other field-validation rules remain separate decisions; this slice does not add UI or audit.
 

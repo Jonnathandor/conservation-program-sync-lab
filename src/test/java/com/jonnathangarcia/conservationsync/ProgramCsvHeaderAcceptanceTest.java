@@ -57,6 +57,7 @@ class ProgramCsvHeaderAcceptanceTest {
             throws Exception {
         long canonicalBefore = count("program_record");
         long quarantineBefore = count("program_record_quarantine");
+        long receiptsBefore = count("import_receipt");
 
         mockMvc.perform(multipart("/api/imports").file(file(csv)))
                 .andExpect(status().isBadRequest())
@@ -67,6 +68,7 @@ class ProgramCsvHeaderAcceptanceTest {
 
         assertThat(count("program_record")).isEqualTo(canonicalBefore);
         assertThat(count("program_record_quarantine")).isEqualTo(quarantineBefore);
+        assertThat(count("import_receipt")).isEqualTo(receiptsBefore);
     }
 
     @Test
@@ -116,7 +118,7 @@ class ProgramCsvHeaderAcceptanceTest {
     }
 
     private long count(String table) {
-        // Called only with the two fixed table names in this test, never request input.
+        // Called only with the fixed table names in this test, never request input.
         return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + table, Long.class);
     }
 }
