@@ -37,7 +37,7 @@ The valid source ID exists once. The malformed timestamp row creates a new quara
 
 ## CSV and API contract
 
-`POST /api/imports` consumes `multipart/form-data` with a required `file` part. The parser reads UTF-8 RFC 4180 CSV, uses the first row as headers, and trims values. Required exact header names:
+`POST /api/imports` consumes `multipart/form-data` with a required `file` part. The parser reads UTF-8 RFC 4180 CSV, uses the first row as headers, and trims values. Required case-sensitive header names (accepted in any order; surrounding whitespace is trimmed as before):
 
 ```csv
 source_id,region_code,status,area_hectares,source_updated_at
@@ -48,6 +48,16 @@ source_id,region_code,status,area_hectares,source_updated_at
 - `status`: one of `PLANNED`, `ACTIVE`, `COMPLETED` (case-sensitive).
 - `area_hectares`: decimal number stored as PostgreSQL `NUMERIC(12,2)`.
 - `source_updated_at`: offset date-time, for example `2026-08-05T14:00:00Z`.
+
+Before reading data rows, the parser checks that every required header appears exactly once and there are no blank or extra names. Missing, duplicate, blank or extra names reject the whole file with HTTP 400, before the import service runs: neither canonical nor quarantine data is written. An empty file has no required headers and is also rejected. A valid header-only file retains HTTP 201 with all counters zero.
+
+Header errors use a minimal JSON response chosen for this milestone (no prior custom error format existed):
+
+```json
+{"code":"INVALID_CSV_HEADERS","message":"CSV headers must contain source_id, region_code, status, area_hectares, and source_updated_at exactly once, in any order, with no blank or extra names."}
+```
+
+This is a file-structure error, distinct from a malformed row value under valid headers: malformed areas/timestamps still use the existing quarantine behavior and successful response counters. The header check does not change numeric/status/version rules or define a general error contract for broken CSV syntax.
 
 A new source ID is created. An existing ID updates only when the incoming timestamp is strictly newer. Equal or older timestamps count as unchanged, even when other fields differ. Counters describe received rows, created records, updated records, unchanged records, and rejected rows.
 
@@ -80,8 +90,8 @@ After two uploads, expect one canonical row and two quarantine rows. Exit psql w
 ./gradlew test --console=plain
 ```
 
-Tests use Docker-backed PostgreSQL 17 Alpine. The 11 test methods cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, mixed uploads with malformed areas/timestamps, and rollback of both canonical and quarantine writes after an unexpected database failure. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
+Tests use Docker-backed PostgreSQL 17 Alpine. The integration tests cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, mixed uploads with malformed areas/timestamps, rollback of both canonical and quarantine writes after an unexpected database failure, and header rejection with no database writes. Header tests also cover reordered/trimmed names, wrong case, empty files, header-only files, and rejection before a broken data row is parsed. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
 
-Known limits: no UI, authentication, deployment setup, quarantine management endpoint, or durable import audit. CSV is loaded into memory. Missing headers, structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
+Known limits: no UI, authentication, deployment setup, quarantine management endpoint, or durable import audit. CSV is loaded into memory. Structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
 
 The lab is complete when a new reader can run this demo, explain its counters and quarantine behavior, and run the existing suite. New product features are outside this milestone. Historical test results are not a guarantee of the current checkout; use an actual test run for current evidence.

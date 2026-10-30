@@ -9,7 +9,7 @@ Implemented evidence:
 - `src/main/java/com/jonnathangarcia/conservationsync/ProgramImportController.java`: multipart `POST /api/imports` and result counters.
 - `ProgramCsvParser.java` and `ProgramImportService.java` in the same directory: CSV ingestion, source-ID uniqueness, updates only for strictly newer timestamps, unsupported-status/malformed-value quarantine, and atomic upload processing.
 - `src/main/resources/db/migration/V1__create_program_record_table.sql` and `V2__create_program_record_quarantine_table.sql`: canonical and quarantine storage.
-- `src/test/java/com/jonnathangarcia/conservationsync/`: 11 test methods, including rollback of canonical/quarantine writes on unexpected database failure. This is a source count, not a fresh test result for this planning change.
+- `src/test/java/com/jonnathangarcia/conservationsync/`: integration coverage for rollback of canonical/quarantine writes on unexpected database failure and file-level header rejection without database writes.
 - `README.md` and `examples/demo-import.csv`: reproducible disposable demo and documented boundaries.
 
 There is currently no application sign-in, browser UI, durable import lifecycle/audit, reporting, or outbound delivery.
@@ -38,16 +38,16 @@ These journeys guide slices; they do not approve every underlying business rule 
 | 5. Mock delivery and recovery | Durable mock outbound work demonstrates retries, idempotency and a traceable final outcome without a real external system. |
 | 6. Release proof | CI runs relevant checks; accessibility, security/access control and bounded load checks have recorded results; container deployment/demo, recovery and cleanup are reproducible. Public hosting requires suitable controls and explicit cost/deployment approval. |
 
-The next implementation slice is only milestone 1's **CSV header validation**, under the approved contract below. Specify the exact error payload and code names first, then add focused parser/HTTP tests proving rejection before any database writes and regression coverage for valid files and reordered headers. Do not implement all field-validation policies at once or fold UI/audit into this slice.
+Milestone 1's bounded **CSV header validation** slice is implemented locally under the contract below, with HTTP/database tests. Other field-validation rules remain separate decisions; this slice does not add UI or audit.
 
-## Approved CSV header contract (not yet implemented)
+## Approved CSV header contract
 
 - Require all five existing column names in any order: `source_id`, `region_code`, `status`, `area_hectares`, `source_updated_at`.
 - Reject missing, duplicate, blank and extra column names with HTTP 400 and a clear error code.
 - Reject the whole file before row processing, with no database writes, including no canonical or quarantine writes.
 - Preserve successful uploads using the existing contract; accepting reordered valid headers must remain supported.
 
-These semantics are approved. The exact error payload shape and error code names still need specification before implementation. Header normalization details must be explicit rather than silently changing existing parsing behavior.
+These semantics are implemented. With no existing custom error convention, this slice uses JSON fields `code` and `message`, with code `INVALID_CSV_HEADERS` and a fixed message listing the expected names/rules (see `README.md`). Names stay case-sensitive and retain existing surrounding-whitespace trimming. Empty files fail the required-name check; valid header-only files keep the existing zero-counter success response. Broken CSV syntax outside this header check remains a separate limitation.
 
 ## Contract decisions still required
 
@@ -60,7 +60,6 @@ Compatibility recommendation: retain `POST /api/imports`, existing counter names
 | Freshness | Agree threshold, clock, and display/summary definition before reporting. |
 | Older/tied versions | Lab counts older/equal timestamps unchanged. Design proposes stale quarantine and equal-time/different-payload conflicts; those changes are unimplemented and require a decision. |
 | Same-file duplicate IDs | Rejecting all occurrences is a proposal, not confirmed policy or current behavior. Choose semantics before implementation. |
-| Header error representation | HTTP 400 and rejection semantics are approved above. Specify exact payload shape, code names and normalization details before implementation. |
 
 ## Scope and design context
 
