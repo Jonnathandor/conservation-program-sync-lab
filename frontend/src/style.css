@@ -1,0 +1,149 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f2f4ed;
+  color: #18382f;
+  font:
+    16px/1.55 system-ui,
+    sans-serif;
+}
+main {
+  max-width: 940px;
+  margin: 48px auto;
+  padding: 0 24px;
+}
+header {
+  border-bottom: 2px solid #a6b6a0;
+  padding-bottom: 28px;
+  margin-bottom: 24px;
+}
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+h1 {
+  font-size: 42px;
+  letter-spacing: -0.04em;
+  margin: 8px 0;
+}
+h2 {
+  font-size: 23px;
+  margin: 0 0 12px;
+}
+section {
+  padding: 26px;
+  background: white;
+  border: 1px solid #d5dfd2;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+.session,
+.section-title,
+li,
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+button,
+.button {
+  font: inherit;
+  background: #245f49;
+  color: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 17px;
+  cursor: pointer;
+  text-decoration: none;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid #d78b27;
+  outline-offset: 4px;
+}
+label {
+  font-weight: 600;
+  display: block;
+}
+input {
+  display: block;
+  margin: 8px 0 18px;
+  max-width: 100%;
+}
+.counts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.counts div {
+  background: #eef4ed;
+  border-radius: 6px;
+  padding: 14px;
+}
+dt {
+  text-transform: capitalize;
+  font-size: 13px;
+}
+dd {
+  font-size: 26px;
+  margin: 0;
+  font-weight: 600;
+}
+.id {
+  font:
+    12px ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+  color: #51645e;
+}
+.error {
+  border-left: 4px solid #a43823;
+  background: #fff0e9;
+  padding: 16px;
+  color: #7b2d20;
+}
+ul {
+  list-style: none;
+  padding: 0;
+}
+li {
+  border-top: 1px solid #dde4da;
+  padding: 18px 0;
+}
+li p {
+  margin: 4px 0;
+}
+footer {
+  color: #5c6e63;
+  font-size: 13px;
+  padding: 24px 0;
+}
+@media (max-width: 600px) {
+  main {
+    margin-top: 24px;
+  }
+  h1 {
+    font-size: 32px;
+  }
+  .counts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .session,
+  .section-title,
+  li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  section {
+    padding: 20px;
+  }
+}

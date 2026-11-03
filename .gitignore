@@ -35,3 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Local React build/dependencies
+frontend/node_modules/
+frontend/dist/

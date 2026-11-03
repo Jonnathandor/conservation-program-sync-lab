@@ -18,10 +18,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@org.springframework.security.test.context.support.WithMockUser(username = "demo", roles = "DEMO_USER")
+@SpringBootTest(properties = "meadowline.demo.password=synthetic-test-password")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class ProgramImportReceiptAcceptanceTest {
@@ -41,7 +43,7 @@ class ProgramImportReceiptAcceptanceTest {
                 """;
         long receiptsBefore = receiptCount();
 
-        var first = mockMvc.perform(multipart("/api/imports").file(file(csv)))
+        var first = mockMvc.perform(multipart("/api/imports").file(file(csv)).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.length()").value(5))
                 .andExpect(jsonPath("$.received").value(2))
@@ -69,7 +71,7 @@ class ProgramImportReceiptAcceptanceTest {
                 OffsetDateTime.class, firstId);
         assertThat(completedAt).isNotNull();
 
-        var second = mockMvc.perform(multipart("/api/imports").file(file(csv)))
+        var second = mockMvc.perform(multipart("/api/imports").file(file(csv)).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.created").value(0))
                 .andExpect(jsonPath("$.unchanged").value(1))
@@ -92,7 +94,7 @@ class ProgramImportReceiptAcceptanceTest {
 
     @Test
     void validHeaderOnlyUploadAlsoHasCompletedReceipt() throws Exception {
-        var location = mockMvc.perform(multipart("/api/imports").file(file(HEADERS)))
+        var location = mockMvc.perform(multipart("/api/imports").file(file(HEADERS)).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.received").value(0))
                 .andReturn().getResponse().getHeader("Location");
@@ -129,7 +131,7 @@ class ProgramImportReceiptAcceptanceTest {
                 CHECK (received <> 2) NOT VALID
                 """);
         try {
-            assertThatThrownBy(() -> mockMvc.perform(multipart("/api/imports").file(file(csv))))
+            assertThatThrownBy(() -> mockMvc.perform(multipart("/api/imports").file(file(csv)).with(csrf())))
                     .hasCauseInstanceOf(DataIntegrityViolationException.class);
         } finally {
             jdbcTemplate.execute("ALTER TABLE import_receipt DROP CONSTRAINT test_receipt_insert_failure");

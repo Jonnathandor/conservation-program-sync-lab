@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -40,6 +41,14 @@ public class ProgramImportController {
         var receipt = receiptService.importAndRecord(rows);
         return ResponseEntity.created(URI.create("/api/imports/" + receipt.id()))
                 .body(receipt.result());
+    }
+
+    @GetMapping
+    public ResponseEntity<?> history(@RequestParam(defaultValue = "0") int offset) {
+        if (offset < 0) {
+            return ResponseEntity.badRequest().body(new ImportError("INVALID_OFFSET", "Offset must be nonnegative."));
+        }
+        return ResponseEntity.ok(receiptService.history(offset));
     }
 
     @GetMapping("/{id}")

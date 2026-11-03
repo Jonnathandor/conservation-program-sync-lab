@@ -16,10 +16,12 @@ import org.springframework.test.web.servlet.ResultActions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@org.springframework.security.test.context.support.WithMockUser(username = "demo", roles = "DEMO_USER")
+@SpringBootTest(properties = "meadowline.demo.password=synthetic-test-password")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 public class ProgramImportAcceptanceTest {
@@ -141,7 +143,7 @@ public class ProgramImportAcceptanceTest {
                                 MIXED_CSV);
 
                 mockMvc.perform(
-                                multipart("/api/imports").file(file))
+                                multipart("/api/imports").file(file).with(csrf()))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.received").value(2))
                                 .andExpect(jsonPath("$.created").value(1))
@@ -197,7 +199,7 @@ public class ProgramImportAcceptanceTest {
                                 MALFORMED_AREA_CSV);
 
                 mockMvc.perform(
-                                multipart("/api/imports").file(file))
+                                multipart("/api/imports").file(file).with(csrf()))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.received").value(2))
                                 .andExpect(jsonPath("$.created").value(1))
@@ -251,7 +253,7 @@ public class ProgramImportAcceptanceTest {
                                 MALFORMED_TIMESTAMP_CSV);
 
                 mockMvc.perform(
-                                multipart("/api/imports").file(file))
+                                multipart("/api/imports").file(file).with(csrf()))
                                 .andExpect(status().isCreated())
                                 .andExpect(jsonPath("$.received").value(2))
                                 .andExpect(jsonPath("$.created").value(1))
@@ -305,7 +307,7 @@ public class ProgramImportAcceptanceTest {
                                 TRANSACTION_ROLLBACK_CSV);
 
                 assertThatThrownBy(() -> mockMvc.perform(
-                                multipart("/api/imports").file(file)))
+                                multipart("/api/imports").file(file).with(csrf())))
                                 .hasCauseInstanceOf(
                                                 DataIntegrityViolationException.class);
 
@@ -341,6 +343,6 @@ public class ProgramImportAcceptanceTest {
                                 VALID_CSV);
 
                 return mockMvc.perform(
-                                multipart("/api/imports").file(file));
+                                multipart("/api/imports").file(file).with(csrf()));
         }
 }

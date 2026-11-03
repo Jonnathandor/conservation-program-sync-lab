@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = "meadowline.demo.password=synthetic-test-password")
 @Import(TestcontainersConfiguration.class)
 public class ProgramImportServiceTest {
         private static final String SOURCE_ID = "SYN-SERVICE-001";

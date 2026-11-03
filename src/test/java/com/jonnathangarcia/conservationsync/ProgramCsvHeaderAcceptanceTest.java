@@ -17,10 +17,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@org.springframework.security.test.context.support.WithMockUser(username = "demo", roles = "DEMO_USER")
+@SpringBootTest(properties = "meadowline.demo.password=synthetic-test-password")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 class ProgramCsvHeaderAcceptanceTest {
@@ -59,7 +61,7 @@ class ProgramCsvHeaderAcceptanceTest {
         long quarantineBefore = count("program_record_quarantine");
         long receiptsBefore = count("import_receipt");
 
-        mockMvc.perform(multipart("/api/imports").file(file(csv)))
+        mockMvc.perform(multipart("/api/imports").file(file(csv)).with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_CSV_HEADERS"))
                 .andExpect(jsonPath("$.message").value(
@@ -78,7 +80,7 @@ class ProgramCsvHeaderAcceptanceTest {
                 2026-08-05T14:00:00Z,ACTIVE,SYN-HEADER-REORDERED-001,42.50,MB
                 """;
 
-        mockMvc.perform(multipart("/api/imports").file(file(csv)))
+        mockMvc.perform(multipart("/api/imports").file(file(csv)).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.received").value(1))
                 .andExpect(jsonPath("$.created").value(1))
@@ -100,7 +102,7 @@ class ProgramCsvHeaderAcceptanceTest {
         long canonicalBefore = count("program_record");
         long quarantineBefore = count("program_record_quarantine");
 
-        mockMvc.perform(multipart("/api/imports").file(file(HEADERS + "\n")))
+        mockMvc.perform(multipart("/api/imports").file(file(HEADERS + "\n")).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.received").value(0))
                 .andExpect(jsonPath("$.created").value(0))
