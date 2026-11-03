@@ -12,7 +12,7 @@ Implemented evidence:
 - `src/test/java/com/jonnathangarcia/conservationsync/`: integration coverage for rollback of canonical/quarantine writes on unexpected database failure and file-level header rejection without database writes.
 - `README.md` and `examples/demo-import.csv`: reproducible disposable demo and documented boundaries.
 
-Completed upload receipts now persist an ID, processing-completion timestamp and counters, retrievable through the POST Location header. There is currently no application sign-in, browser UI, failed-attempt lifecycle/audit, reporting, or outbound delivery.
+Completed upload receipts now persist an ID, processing-completion timestamp and counters, retrievable through the POST Location header. A local React/TypeScript upload/history UI and Spring Security session sign-in are now implemented for one synthetic shared demo account. Failed-attempt lifecycle/audit, business roles/per-user ownership, reporting, and outbound delivery remain unimplemented.
 
 ## Accepted technical direction
 
@@ -37,6 +37,8 @@ These journeys guide slices; they do not approve every underlying business rule 
 | 4. Record and exception review | Steward can inspect records and reasons and follow correction/resubmission lineage; manager summary/freshness values reconcile with fixtures under agreed definitions. |
 | 5. Mock delivery and recovery | Durable mock outbound work demonstrates retries, idempotency and a traceable final outcome without a real external system. |
 | 6. Release proof | CI runs relevant checks; accessibility, security/access control and bounded load checks have recorded results; container deployment/demo, recovery and cleanup are reproducible. Public hosting requires suitable controls and explicit cost/deployment approval. |
+
+Milestone 3's local-demo slice adds server-enforced demo-role access, session/CSRF protection, upload result/error UX and paged completed history. It does not resolve steward/manager permissions or multi-user data ownership. The password comes from the environment; no external identity service or public deployment is added. Real-browser file-upload verification remains pending the local testing tool's file-access permission.
 
 Milestone 2's first bounded slice saves completed CSV import receipts atomically with data writes and retrieves them by ID. It does not record failed or interrupted attempts, add lifecycle states, or provide a history list. Those still require explicit failure/retry design before broader lifecycle work. The next user-facing direction remains the browser upload/history journey, rather than unrelated backend expansion.
 

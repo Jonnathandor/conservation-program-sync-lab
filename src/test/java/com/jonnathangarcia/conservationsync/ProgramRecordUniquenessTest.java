@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.OffsetDateTime;
 
 
-@SpringBootTest
+@SpringBootTest(properties = "meadowline.demo.password=synthetic-test-password")
 @Import(TestcontainersConfiguration.class)
 public class ProgramRecordUniquenessTest {
     private static final String SOURCE_ID = "SYN-DB-UNIQUE-001";

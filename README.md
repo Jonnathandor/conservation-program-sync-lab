@@ -4,36 +4,44 @@ A bounded Spring Boot/PostgreSQL lab for importing synthetic conservation progra
 
 ## Run the disposable demo
 
-Prerequisites: JDK 17 for the configured Java toolchain, a JDK compatible with Gradle 9.5.1 to run the wrapper (JDK 21 works), Docker running with permission to start containers, curl, and internet access for initial dependency/image downloads. No separate Gradle installation is required.
+Prerequisites: Node.js 24/npm for the UI, JDK 17 for the configured Java toolchain, a compatible Gradle runtime JDK (JDK 21 works), and a running Docker-compatible engine. Initial builds download from npm's registry and Maven Central; no global frontend tooling is required.
 
 From the repository root:
 
 ```sh
+npm ci --prefix frontend
+npm run build --prefix frontend
+read -s 'MEADOWLINE_DEMO_PASSWORD?Choose a temporary local demo password: '
+export MEADOWLINE_DEMO_PASSWORD
 ./gradlew bootTestRun --console=plain
 ```
 
-The existing `TestConservationProgramSyncLabApplication` launcher imports `TestcontainersConfiguration`, which starts `postgres:17-alpine` and supplies the connection through `@ServiceConnection`. Flyway creates the schema. Wait for the application startup message; the default HTTP port is 8080. Use a fresh disposable database and no external datasource overrides for the expected results below. Keep this terminal running.
+The password prompt above uses zsh (macOS default). On another shell, set `MEADOWLINE_DEMO_PASSWORD` securely in the environment without saving it in repository files. Startup fails if it is blank. The single in-memory account is `demo`, with a Spring-encoded password. This is a local shared synthetic workspace, not user provisioning or an approved steward/manager permission model.
 
-In a second terminal at the repository root:
+Open `http://127.0.0.1:8080/`, choose **Sign in**, and use `demo` plus your temporary password. Spring Security renders/processes the login form and establishes the server session. Upload `examples/demo-import.csv`:
 
-```sh
-curl --fail-with-body -X POST http://localhost:8080/api/imports \
-  -F 'file=@examples/demo-import.csv'
-```
+- First upload on fresh data: received 2, created 1, updated 0, unchanged 0, rejected 1.
+- Repeat upload: received 2, created 0, updated 0, unchanged 1, rejected 1.
+- The rejected row is quarantined. Each completed upload creates a separate receipt; one canonical record remains.
+- Refresh the browser, revisit **Completed history**, and use **View receipt** to read a prior result. History has 20 receipts per page, newest first. **Sign out** invalidates the session.
 
-Expected HTTP 201 response on fresh data (JSON field order is immaterial):
+The existing launcher starts disposable PostgreSQL 17 Alpine, supplies its connection through Testcontainers, and applies Flyway migrations. Keep its terminal open. Data survives browser refresh but disappears when that disposable database is removed. No external datasource or real data should be used for this demo.
 
-```json
-{"received":2,"created":1,"updated":0,"unchanged":0,"rejected":1}
-```
+Build the UI again after frontend edits; there is no separate cross-origin development server. `processResources` copies `frontend/dist` into the application's static resources. For a packaged local artifact, run the UI build first and then `./gradlew bootJar`; normal application startup still needs a PostgreSQL datasource and the demo password.
 
-Run the same upload again:
+## Session and API protection
 
-```json
-{"received":2,"created":0,"updated":0,"unchanged":1,"rejected":1}
-```
+The app binds to loopback (`127.0.0.1`). API reads, uploads, session details and CSRF-token retrieval require the server-enforced `DEMO_USER` role. Anonymous API reads return HTTP 401; authenticated users without that role receive 403. Unsafe requests without CSRF tokens can receive 403 before authentication is evaluated. The React page is public but cannot read API data before sign-in. Existing POST success bodies, Location headers, and import semantics are unchanged; authentication and CSRF are now required for API clients.
 
-The valid source ID exists once. The malformed timestamp row creates a new quarantine entry on every upload; quarantine itself is not deduplicated.
+Spring Security's session-backed CSRF protection remains enabled, including login/logout. The browser fetches `/api/csrf` after sign-in and sends its token in the provided header for upload/logout; it lets the browser generate multipart boundaries. Session cookies are HttpOnly with SameSite=Strict; local HTTP is for synthetic testing only. TLS, real account lifecycle, per-user receipt ownership, rate limiting and production operations are not provided. Do not publish this demo or reuse real credentials. All demo-account receipts share one synthetic workspace.
+
+New authenticated endpoints:
+
+- `GET /api/session`: current username; 401 after logout/expiry.
+- `GET /api/csrf`: `headerName` and current masked `token`; never persist or log tokens.
+- `GET /api/imports?offset=0`: `{receipts: [...], hasMore: boolean}`, at most 20 receipt DTOs, sorted by completion time then ID descending. Nonnegative integer offsets; use 20, 40, etc. for later pages. Concurrent uploads can shift offset pages; this slice does not promise snapshot pagination.
+
+No raw CSV, filename or source identifiers are added to history. Missing/expired-session and failed-request messages are visible in the UI; retry/history refresh controls remain available.
 
 ## CSV and API contract
 
@@ -67,18 +75,7 @@ Unsupported statuses, malformed decimals, and malformed timestamps are quarantin
 
 Every completed CSV upload now saves an independent receipt in the same transaction as its canonical/quarantine writes. A completion may include rejected rows: the receipt records the returned counters, not a claim that all rows were valid. Reuploading creates a new receipt while canonical record idempotency stays unchanged. Invalid headers or an unexpected database failure leave no receipt. Failed attempts, crash recovery and retries are not recorded by this slice.
 
-The POST response remains HTTP 201 with exactly the existing five-counter JSON body. An additive `Location` header tells the caller where to retrieve the saved receipt. Show it with:
-
-```sh
-curl --fail-with-body -i http://localhost:8080/api/imports \
-  -F 'file=@examples/demo-import.csv'
-```
-
-Replace `<uuid>` below with the ID in the returned `Location` path:
-
-```sh
-curl --fail-with-body 'http://localhost:8080/api/imports/<uuid>'
-```
+The POST response remains HTTP 201 with exactly the existing five-counter JSON body. Its additive `Location` header identifies the saved receipt at `/api/imports/{id}`. The signed-in React UI follows that link automatically. API clients must supply an authenticated session cookie and valid CSRF header for writes; unauthenticated curl examples from earlier lab versions no longer work.
 
 `GET /api/imports/{id}` returns HTTP 200 with this shape (values illustrative):
 
@@ -88,7 +85,7 @@ curl --fail-with-body 'http://localhost:8080/api/imports/<uuid>'
 
 `completedAt` is the database timestamp when the receipt is inserted after row processing, before transaction commit. It survives only if that transaction commits. The receipt stores no filename, raw CSV, source IDs, or personal data. An unknown well-formed UUID returns HTTP 404 with `{"code":"IMPORT_RECEIPT_NOT_FOUND","message":"No completed import receipt exists for this ID."}`. Malformed UUIDs return HTTP 400 through Spring's existing conversion handling; no custom body is promised for that case.
 
-The lookup currently has no authentication or ownership rules. UUIDs reduce accidental guessing but are not access control. Use only the local synthetic demo; do not expose this API publicly before authentication and authorization are designed. There is no list/history screen yet. The default Testcontainers demo is disposable: receipts disappear with its database, while the application itself persists them in PostgreSQL.
+The lookup and paged history require the demo role, but receipts have no per-user ownership. Use only the local shared synthetic demo; business role/ownership policy and production controls remain future decisions. The default Testcontainers demo is disposable: receipts disappear with its database, while the application itself persists them in PostgreSQL.
 
 ## Inspect and clean up the demo
 
@@ -117,8 +114,10 @@ After two uploads, expect one canonical row, two quarantine rows and two receipt
 ./gradlew test --console=plain
 ```
 
+Frontend checks: `npm test --prefix frontend` and `npm run build --prefix frontend` (includes TypeScript checking). Backend checks: `./gradlew test`. Security tests use a synthetic password passed explicitly through test annotations, never as a runnable application default.
+
 Tests use Docker-backed PostgreSQL 17 Alpine. The integration tests cover application startup, database source-ID uniqueness, identical/newer/older imports, unsupported statuses, HTTP repeat uploads, mixed uploads with malformed areas/timestamps, rollback of both canonical and quarantine writes after an unexpected database failure, header rejection with no database writes, and receipt persistence/retrieval, reimport, 404 behavior and rollback when the receipt insert itself fails. Header tests also cover reordered/trimmed names, wrong case, empty files, header-only files, and rejection before a broken data row is parsed. Source: `src/test/java/com/jonnathangarcia/conservationsync/`.
 
-Known limits: no UI, authentication, deployment setup, quarantine management endpoint, or failed-attempt lifecycle audit (completed receipts are available). CSV is loaded into memory. Structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
+Known limits: local-demo authentication/UI only; no real identity provisioning, per-user ownership, deployment setup, quarantine management endpoint, or failed-attempt lifecycle audit. CSV is loaded into memory. Structurally broken CSV, oversized database values, and other unhandled constraint errors have no custom error contract. Blank identifiers/regions, nonnegative area rules, timestamp ties with differing content, and concurrent imports have no comprehensive validation/test coverage. Plain `bootRun` requires an externally configured PostgreSQL datasource; this guide deliberately uses the existing disposable launcher.
 
 The lab is complete when a new reader can run this demo, explain its counters and quarantine behavior, and run the existing suite. New product features are outside this milestone. Historical test results are not a guarantee of the current checkout; use an actual test run for current evidence.

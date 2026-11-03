@@ -43,6 +43,17 @@ public class ProgramImportReceiptService {
                 """, this::mapReceipt, id).stream().findFirst();
     }
 
+    @Transactional(readOnly = true)
+    public HistoryPage history(int offset) {
+        var receipts = jdbcTemplate.query("""
+                SELECT id, completed_at, received, created, updated, unchanged, rejected
+                FROM import_receipt ORDER BY completed_at DESC, id DESC LIMIT 21 OFFSET ?
+                """, this::mapReceipt, offset);
+        return new HistoryPage(receipts.stream().limit(20).toList(), receipts.size() > 20);
+    }
+
+    public record HistoryPage(List<ImportReceipt> receipts, boolean hasMore) { }
+
     private ImportReceipt mapReceipt(ResultSet row, int rowNumber) throws SQLException {
         return new ImportReceipt(
                 row.getObject("id", UUID.class),
