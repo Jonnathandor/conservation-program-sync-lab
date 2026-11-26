@@ -2,7 +2,21 @@
 
 A bounded Spring Boot/PostgreSQL lab for importing synthetic conservation program records from CSV. It demonstrates source-ID idempotency, timestamp precedence, and rejection quarantine. It is a hypothetical portfolio project, not a production integration.
 
-## Run the disposable demo
+## Run the disposable demo with Docker
+
+Start Docker Desktop (or another Docker engine with Compose), then run from the repository root:
+
+```sh
+./bin/demo-up
+```
+
+Choose a temporary password at the hidden prompt. The first run downloads images and build dependencies. Docker builds React and bundles it inside the Spring Boot JAR, starts a fresh PostgreSQL 17 database, and waits for PostgreSQL before starting the app. No local Node or JDK is needed. Keep the Terminal open for logs.
+
+Open `http://127.0.0.1:8080/`, select **Sign in**, and use `demo` with your temporary password. Use the browser checks below. If port 8080 is occupied, run `MEADOWLINE_PORT=8081 ./bin/demo-up` and open port 8081 instead.
+
+Press Ctrl-C to stop, then run `docker compose down` to remove the stack's containers and network. The database is disposable: it survives a browser refresh, but stopping the database container clears its in-memory storage. The app is published only on your machine's loopback interface, and the database is not published at all. Use synthetic data and a throwaway password, never real credentials or records.
+
+## Run the disposable demo with local Node and Java
 
 Prerequisites: Node.js 24/npm for the UI, JDK 17 for the configured Java toolchain, a compatible Gradle runtime JDK (JDK 21 works), and a running Docker-compatible engine. Initial builds download from npm's registry and Maven Central; no global frontend tooling is required.
 
@@ -18,7 +32,7 @@ export MEADOWLINE_DEMO_PASSWORD
 
 The password prompt above uses zsh (macOS default). On another shell, set `MEADOWLINE_DEMO_PASSWORD` securely in the environment without saving it in repository files. Startup fails if it is blank. The single in-memory account is `demo`, with a Spring-encoded password. This is a local shared synthetic workspace, not user provisioning or an approved steward/manager permission model.
 
-Open `http://127.0.0.1:8080/`, choose **Sign in**, and use `demo` plus your temporary password. Spring Security renders/processes the login form and establishes the server session. Upload `examples/demo-import.csv`:
+Open `http://127.0.0.1:8080/`, choose **Sign in**, and use `demo` plus your temporary password. Spring Security renders/processes the login form and establishes the server session. For either startup method, upload `examples/demo-import.csv`:
 
 - First upload on fresh data: received 2, created 1, updated 0, unchanged 0, rejected 1.
 - Repeat upload: received 2, created 0, updated 0, unchanged 1, rejected 1.
@@ -91,7 +105,7 @@ The lookup and paged history require the demo role, but receipts have no per-use
 
 `V1__create_program_record_table.sql` creates `program_record` with a unique `source_id`; `V2__create_program_record_quarantine_table.sql` stores rejected raw values, rejection reasons, and quarantine timestamps. `V3__create_import_receipt_table.sql` adds UUID receipt identity, completion time and the five counters with consistency constraints. All three live under `src/main/resources/db/migration/`.
 
-Find the PostgreSQL container started for this run from the Testcontainers startup log. Verify its ID against `docker ps` and use only that disposable container, never an unrelated database:
+For the Compose demo, inspect its disposable database with `docker compose exec db psql -U meadowline -d meadowline`. For the Testcontainers demo, find the PostgreSQL container started for this run from the startup log. Verify its ID against `docker ps` and use only that disposable container, never an unrelated database:
 
 ```sh
 docker exec -it <demo-postgres-container-id> psql -U test -d test
@@ -106,7 +120,7 @@ SELECT source_id, source_updated_at, rejection_reason
 FROM program_record_quarantine WHERE source_id = 'SYN-DEMO-BAD-TIME-001';
 ```
 
-After two uploads, expect one canonical row, two quarantine rows and two receipts on fresh demo data. Inspect receipts with `SELECT * FROM import_receipt ORDER BY completed_at;`. Exit psql with `\q`. Stop the demo with Ctrl-C in its startup terminal; Testcontainers/Ryuk normally removes its disposable containers. If an interrupted run leaves a container behind, verify the exact ID belongs to this demo before removing that container only. Do not prune containers or volumes globally. Restart with a fresh disposable instance to reset the demonstration; no persistent database cleanup is needed.
+After two uploads, expect one canonical row, two quarantine rows and two receipts on fresh demo data. Inspect receipts with `SELECT * FROM import_receipt ORDER BY completed_at;`. Exit psql with `\q`. For the Testcontainers launcher, stop the demo with Ctrl-C in its startup terminal; Testcontainers/Ryuk normally removes its disposable containers. If an interrupted run leaves a container behind, verify the exact ID belongs to this demo before removing that container only. Do not prune containers or volumes globally. Restart with a fresh disposable instance to reset the demonstration; no persistent database cleanup is needed.
 
 ## Tests and boundaries
 

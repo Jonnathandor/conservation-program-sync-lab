@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: meadowline
+      POSTGRES_USER: meadowline
+      POSTGRES_PASSWORD: local-demo-db-only
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "meadowline", "-d", "meadowline"]
+      start_period: 10s
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SERVER_ADDRESS: "0.0.0.0"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/meadowline
+      SPRING_DATASOURCE_USERNAME: meadowline
+      SPRING_DATASOURCE_PASSWORD: local-demo-db-only
+      MEADOWLINE_DEMO_PASSWORD: "${MEADOWLINE_DEMO_PASSWORD:-}"
+    ports:
+      - "127.0.0.1:${MEADOWLINE_PORT:-8080}:8080"

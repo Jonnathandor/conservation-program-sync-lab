@@ -1,0 +1,26 @@
+# Only send sources the image needs. No local env, data, or build output.
+**
+!build.gradle
+!settings.gradle
+!gradlew
+!gradle/
+gradle/**
+!gradle/wrapper/
+gradle/wrapper/**
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!src/
+src/**
+!src/main/
+!src/main/**
+!frontend/
+frontend/**
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/tsconfig.json
+!frontend/vite.config.ts
+!frontend/src/
+!frontend/src/**
+**/.env*
+**/.DS_Store

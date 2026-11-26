@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd -- "$(dirname -- "$0")/.."
+if ! IFS= read -r -s -p 'Choose a temporary Meadowline demo password: ' MEADOWLINE_DEMO_PASSWORD; then
+  exit 1
+fi
+printf '\n'
+if [[ -z "${MEADOWLINE_DEMO_PASSWORD//[[:space:]]/}" ]]; then
+  printf 'The demo password cannot be blank.\n' >&2
+  exit 1
+fi
+export MEADOWLINE_DEMO_PASSWORD
+
+exec docker compose up --build
